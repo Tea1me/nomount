@@ -61,6 +61,7 @@ NoMount is distributed as a **Metamodule** for KernelSU (and forks) and APatch (
 
 The NoMount module includes a built-in **WebUI** that allows you to easily control the kernel subsystem without touching the terminal:
 * **Hot Load/Unload:** Enable or disable modules on the fly without rebooting.
+* **Custom Rules:** Add your own path redirections, whiteouts, and opaque directory rules straight from the Modules page. Saved rules are persisted to `/data/adb/nomount/custom_rules.json` and replayed automatically at boot.
 * **App Exclusion (UID Isolation):** Select specific apps (like banking apps or anti-cheats) from a list. The WebUI extracts their UID and isolates them, ensuring they only see the stock, untouched filesystem.
 * **Global Flush:** Instantly clear all redirection rules.
 
@@ -122,7 +123,7 @@ nm uid add 10256
 
 ```
 
-> **Note:** Because NoMount operates entirely in RAM, manual rules or modifications created via the CLI are lost upon reboot. The metamodule handles the persistent injection of your installed modules automatically during the boot process.
+> **Note:** Because NoMount operates entirely in RAM, manual rules created via the CLI are lost upon reboot. The metamodule handles the persistent injection of your installed modules automatically during the boot process. Rules added through the WebUI's **Custom Rules** section are saved and replayed at boot; clearing rules from the Settings page also clears these saved rules.
 
 ## Special Thanks
 

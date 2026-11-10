@@ -1,3 +1,20 @@
+## Unreleased
+
+### Small Changelog:
+
+- webui/:
+  - New **Custom Rules** section on the Modules page. Add, list, and delete manual `nm rule add` equivalents without a terminal:
+    - plain redirection (`<virtual> <real>`),
+    - whiteout (`--whiteout <virtual>`),
+    - opaque directory (`--opaque <virtual> <real>`).
+  - Every custom rule shows its live state (Active / Pending) by comparing against `nm rule list --json`.
+  - Rules are persisted to `/data/adb/nomount/custom_rules.json` together with a generated
+    `/data/adb/nomount/custom_rules.sh`, so they survive reboots. Paths are validated (absolute only)
+    and shell-quoted when the replay script is generated.
+  - Clearing rules / clearing all from Settings now also wipes the persisted custom rules.
+- module/:
+  - `service.sh` replays `custom_rules.sh` after restoring UID exclusions and the isolated-UID flag.
+
 ## NoMount v2.2.0 is here!🎉
 
 This release brings UID-scoped rules, opaque directory redirection, `.remove` support, and the biggest hot-path optimization pass we've ever shipped. The kernel driver and the metamodule **must be updated together**.
