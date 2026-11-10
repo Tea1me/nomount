@@ -81,5 +81,22 @@
   "advanced_color": "高级颜色",
   "done": "完成",
   "modules_skip": "跳过注入",
-  "modules_unskip": "取消跳过"
+  "modules_unskip": "取消跳过",
+  "custom_rules": "自定义规则",
+  "add_custom_rule": "添加自定义规则",
+  "no_custom_rules": "暂无自定义规则",
+  "rule_type_inject": "注入",
+  "rule_type_whiteout": "隐藏",
+  "rule_type_opaque": "不透明目录",
+  "rule_active": "已生效",
+  "rule_pending": "待生效",
+  "rule_added": "规则已添加",
+  "rule_saved_pending": "已保存；运行时应用失败",
+  "rule_exists": "该路径已存在规则",
+  "rule_save_failed": "保存规则失败",
+  "rule_deleting": "正在删除规则...",
+  "rule_deleted": "规则已删除",
+  "rule_delete_failed": "删除规则失败",
+  "invalid_rule_path": "路径必须为绝对路径",
+  "error_loading_custom_rules": "加载自定义规则失败"
 }

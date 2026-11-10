@@ -476,6 +476,11 @@ md-icon svg { width: 1em; height: 1em; fill: currentColor; display: block; }
 }
 #fab-container.visible { opacity: 1; transform: scale(1); pointer-events: auto; }
 #uid-input-modal { align-items: center; justify-content: center; z-index: 2100; }
+#custom-rule-modal { align-items: center; justify-content: center; z-index: 2100; }
+#custom-rule-modal .md-dialog { gap: 12px; }
+#rule-type-wrapper { width: 100%; }
+#rule-type-wrapper .custom-select-trigger { width: 100%; justify-content: space-between; }
+#rule-type-wrapper .custom-select-menu { inset-inline: 0; }
 
 .md-dialog {
     background: var(--md-sys-color-surface-container-high);
@@ -582,6 +587,30 @@ md-icon svg { width: 1em; height: 1em; fill: currentColor; display: block; }
 }
 .md-chip md-icon { font-size: 16px; }
 .module-divider { background-color: var(--md-sys-color-outline); opacity: 0.15; }
+
+.custom-rules-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 8px; padding-inline-start: 16px;
+}
+.custom-rules-header .segment-section-label { margin: 0; }
+.custom-rules-header md-icon-button { color: var(--md-sys-color-primary); }
+
+.custom-rule-card { align-items: center; }
+.custom-rule-text { gap: 6px; min-width: 0; }
+.custom-rule-path-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.custom-rule-path,
+.custom-rule-real {
+    word-break: break-all; overflow-wrap: anywhere;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.custom-rule-path { font-size: 13px; }
+.custom-rule-real { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
+.rule-type-chip { background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+.rule-type-whiteout { background-color: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
+.rule-type-opaque { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+#custom-rules-list .empty-state { min-height: 120px; }
+#custom-rules-list .empty-face { font-size: 40px; }
+.custom-rule-card .btn-delete-rule { color: var(--md-sys-color-error); }
 
 .color-picker-input {
     -webkit-appearance: none;

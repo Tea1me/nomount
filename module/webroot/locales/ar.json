@@ -81,5 +81,22 @@
   "advanced_color": "ألوان متقدمة",
   "done": "تم",
   "modules_skip": "تخطي",
-  "modules_unskip": "إلغاء التخطي"
+  "modules_unskip": "إلغاء التخطي",
+  "custom_rules": "Custom Rules",
+  "add_custom_rule": "Add custom rule",
+  "no_custom_rules": "No custom rules yet",
+  "rule_type_inject": "Inject",
+  "rule_type_whiteout": "Whiteout",
+  "rule_type_opaque": "Opaque",
+  "rule_active": "Active",
+  "rule_pending": "Pending",
+  "rule_added": "Rule added",
+  "rule_saved_pending": "Saved; runtime apply failed",
+  "rule_exists": "A rule for this path already exists",
+  "rule_save_failed": "Failed to save rules",
+  "rule_deleting": "Removing rule...",
+  "rule_deleted": "Rule deleted",
+  "rule_delete_failed": "Failed to delete rule",
+  "invalid_rule_path": "Paths must be absolute",
+  "error_loading_custom_rules": "Error loading custom rules"
 }

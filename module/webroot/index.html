@@ -83,6 +83,14 @@
             <div id="view-modules" class="view-content">
                 <div class="header-title" data-i18n="nav_modules">Modules</div>
                 <div id="modules-list" class="list"></div>
+
+                <div class="custom-rules-header">
+                    <div class="segment-section-label" data-i18n="custom_rules">Custom Rules</div>
+                    <md-icon-button id="btn-add-custom-rule" aria-label="Add custom rule">
+                        <md-icon>add</md-icon>
+                    </md-icon-button>
+                </div>
+                <div id="custom-rules-list" class="list"></div>
             </div>
 
             <div id="view-exclusions" class="view-content">
@@ -226,6 +234,29 @@
             <div class="md-dialog-actions">
                 <button class="btn-text" id="btn-cancel-uid" data-i18n="cancel">Cancel</button>
                 <button class="btn-text" id="btn-confirm-uid" data-i18n="add">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="custom-rule-modal" class="modal-overlay">
+        <div class="md-dialog">
+            <h3 class="md-dialog-title" data-i18n="add_custom_rule">Add custom rule</h3>
+            <div class="custom-select-wrapper" id="rule-type-wrapper">
+                <div class="custom-select-trigger" id="rule-type-trigger">
+                    <span id="rule-type-value">Inject</span>
+                    <md-icon class="dropdown-arrow">arrow_drop_down</md-icon>
+                </div>
+                <div class="custom-select-menu" id="rule-type-menu"></div>
+            </div>
+            <div class="md-text-field">
+                <input type="text" id="rule-virtual-input" placeholder="/system/etc/example.conf" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="md-text-field" id="rule-real-field">
+                <input type="text" id="rule-real-input" placeholder="/data/local/tmp/example.conf" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="md-dialog-actions">
+                <button class="btn-text" id="btn-cancel-rule" data-i18n="cancel">Cancel</button>
+                <button class="btn-text" id="btn-confirm-rule" data-i18n="add">Add</button>
             </div>
         </div>
     </div>

@@ -5,6 +5,7 @@ NM_BIN="$MODDIR/bin/nm"
 EXCLUSION_JSON="/data/adb/nomount/.exclusion_list.json"
 ISOLATED_FLAG="/data/adb/nomount/.block_isolated_uids"
 DISABLE_FLAG="/data/adb/nomount/disable"
+CUSTOM_RULES_SCRIPT="/data/adb/nomount/custom_rules.sh"
 
 [ -x "$NM_BIN" ] || exit 0
 [ -f "$DISABLE_FLAG" ] && exit 0
@@ -19,4 +20,8 @@ fi
 
 if [ -f "$ISOLATED_FLAG" ]; then
     "$NM_BIN" uid block_isolated on >/dev/null 2>&1
+fi
+
+if [ -f "$CUSTOM_RULES_SCRIPT" ]; then
+    sh "$CUSTOM_RULES_SCRIPT" >/dev/null 2>&1
 fi

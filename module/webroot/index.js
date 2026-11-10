@@ -153,6 +153,8 @@ const MOD_DIR = "/data/adb/modules";
 const NM_DATA = "/data/adb/nomount";
 const NM_BIN = "/data/adb/modules/nomount/bin/nm";
 const RULE_PATHS = `${MOD_DIR}/nomount/rule-paths.sh`;
+const CUSTOM_RULES_FILE = `${NM_DATA}/custom_rules.json`;
+const CUSTOM_RULES_SCRIPT = `${NM_DATA}/custom_rules.sh`;
 const FILES = { disable: `${NM_DATA}/disable`, exclusions: `${NM_DATA}/.exclusion_list.json`, isolated: `${NM_DATA}/.block_isolated_uids`, theme: `${NM_DATA}/theme.json` };
 const APP_ICON_FALLBACK = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzgwODA4MCI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMThjLTQuNDEgMC04LTMuNTktOC04czMuNTktOCA4LTggOCAzLjU5IDggOC0zLjU5IDgtOCA4eiIvPjwvc3ZnPg==";
 const viewLoadState = { 'view-home': false, 'view-modules': false, 'view-exclusions': false, 'view-options': false };
@@ -525,6 +527,8 @@ window.addEventListener('popstate', (e) => {
         nmDialogClosers.advanced?.();
     if (prev.dialog === 'colorPresets' && next.dialog !== 'colorPresets')
         nmDialogClosers.presets?.();
+    if (prev.dialog === 'customRule' && next.dialog !== 'customRule')
+        closeCustomRuleModalFromHistory();
     if (prev.level === 3 && next.level < 3)
         closeUidModalFromHistory();
     if (prev.level === 2 && next.level < 2) {
@@ -574,7 +578,7 @@ function switchToTab(target, pushToHistory = true) {
         if (!viewLoadState[target]) {
             viewLoadState[target] = true;
             if (target === 'view-home') loadHome();
-            else if (target === 'view-modules') loadModules();
+            else if (target === 'view-modules') { loadModules(); loadCustomRules(); }
             else if (target === 'view-exclusions') loadExclusions();
             else if (target === 'view-options') loadOptions();
         }
@@ -828,6 +832,233 @@ async function unloadModule(modId) {
             | xargs -0 -r -n 200 ${NM_BIN} rule del
     `;
     try { await exec(script); } catch (e) { throw e; }
+}
+
+// Custom Rules
+const CUSTOM_RULE_TYPES = ['inject', 'whiteout', 'opaque'];
+let customRuleType = 'inject';
+let customRulesLoadId = 0;
+
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const shQuote = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
+const isValidRulePath = (p) => typeof p === 'string' && p.startsWith('/') && p.length < 4096 && !/[\n\r\0]/.test(p);
+
+function serializeCustomRules(rules) {
+    const json = JSON.stringify(rules);
+    const cmds = rules.map(r => {
+        if (r.type === 'whiteout') return `"$NM_BIN" rule add --whiteout ${shQuote(r.virtual)}`;
+        if (r.type === 'opaque') return `"$NM_BIN" rule add --opaque ${shQuote(r.virtual)} ${shQuote(r.real)}`;
+        return `"$NM_BIN" rule add ${shQuote(r.virtual)} ${shQuote(r.real)}`;
+    });
+    const script = `#!/system/bin/sh\nNM_BIN="${NM_BIN}"\n[ -x "$NM_BIN" ] || exit 0\n${cmds.join('\n')}${cmds.length ? '\n' : ''}`;
+    return { json, script };
+}
+
+async function readCustomRules() {
+    try {
+        const { stdout } = await exec(`cat ${CUSTOM_RULES_FILE} 2>/dev/null || echo "[]"`);
+        const parsed = JSON.parse(stdout.trim());
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter(r => r && isValidRulePath(r.virtual) && CUSTOM_RULE_TYPES.includes(r.type) &&
+            (r.type === 'whiteout' ? true : isValidRulePath(r.real)));
+    } catch { return []; }
+}
+
+async function writeCustomRules(rules) {
+    const { json, script } = serializeCustomRules(rules);
+    const b64json = btoa(unescape(encodeURIComponent(json)));
+    const b64script = btoa(unescape(encodeURIComponent(script)));
+    const cmd = `mkdir -p ${NM_DATA} && echo "${b64json}" | base64 -d > ${CUSTOM_RULES_FILE}.tmp && mv -f ${CUSTOM_RULES_FILE}.tmp ${CUSTOM_RULES_FILE} && ` +
+        `echo "${b64script}" | base64 -d > ${CUSTOM_RULES_SCRIPT}.tmp && chmod 755 ${CUSTOM_RULES_SCRIPT}.tmp && mv -f ${CUSTOM_RULES_SCRIPT}.tmp ${CUSTOM_RULES_SCRIPT}`;
+    return await exec(cmd);
+}
+
+async function getRuntimeRules() {
+    try {
+        const { stdout } = await exec(`${NM_BIN} rule list --json 2>/dev/null`);
+        const parsed = JSON.parse(stdout.trim() || "[]");
+        return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+}
+
+const ruleMatchesRuntime = (rule, runtime) => runtime.some(rt => {
+    if (!rt || rt.virtual !== rule.virtual) return false;
+    if (rule.type === 'whiteout') return rt.whiteout === true;
+    if (rule.type === 'opaque') return rt.opaque === true && rt.real === rule.real;
+    return !rt.whiteout && !rt.opaque && rt.real === rule.real;
+});
+
+async function loadCustomRules() {
+    const listContainer = document.getElementById('custom-rules-list');
+    if (!listContainer) return;
+    const loadId = ++customRulesLoadId;
+
+    try {
+        const [rules, runtime] = await Promise.all([readCustomRules(), getRuntimeRules()]);
+
+        if (rules.length === 0) {
+            requestAnimationFrame(() => {
+                if (loadId === customRulesLoadId) renderEmptyState(listContainer, '(._.)', translate('no_custom_rules'));
+            });
+            return;
+        }
+
+        const htmlArr = rules.map((r, index) => {
+            const active = ruleMatchesRuntime(r, runtime);
+            const typeLabel = translate(`rule_type_${r.type}`);
+            const target = r.type === 'whiteout' ? '' : escapeHtml(r.real);
+            return `
+                <div class="card setting-item custom-rule-card" data-index="${index}">
+                    <div class="setting-text custom-rule-text">
+                        <div class="custom-rule-path-row">
+                            <span class="md-chip rule-type-chip rule-type-${r.type}">${escapeHtml(typeLabel)}</span>
+                            <span class="md-chip status-${active ? 'active' : 'inactive'}">${translate(active ? 'rule_active' : 'rule_pending')}</span>
+                        </div>
+                        <h3 class="custom-rule-path">${escapeHtml(r.virtual)}</h3>
+                        ${target ? `<p class="custom-rule-real">${target}</p>` : ''}
+                    </div>
+                    <md-icon-button class="btn-delete-rule" aria-label="Delete rule" data-index="${index}">
+                        <md-icon data-icon="delete" data-icon-variant="outline" aria-hidden="true">
+                            <svg viewBox="0 -960 960 960" aria-hidden="true" style="width:100%; height:100%; fill:currentColor;">
+                                <path d="${ICON_PATHS['delete']}"/>
+                            </svg>
+                        </md-icon>
+                    </md-icon-button>
+                </div>
+            `;
+        });
+
+        requestAnimationFrame(() => {
+            if (loadId === customRulesLoadId) listContainer.innerHTML = htmlArr.join('');
+        });
+    } catch (e) {
+        renderTextState(listContainer, 'error-message', translate('error_loading_custom_rules'));
+    }
+}
+
+async function addCustomRule(virtual, real, type) {
+    if (!isValidRulePath(virtual)) return showToast(translate('invalid_rule_path'));
+    if (type !== 'whiteout' && !isValidRulePath(real)) return showToast(translate('invalid_rule_path'));
+
+    const rules = await readCustomRules();
+    if (rules.some(r => r.virtual === virtual)) return showToast(translate('rule_exists'));
+
+    const cmd = type === 'whiteout'
+        ? `${NM_BIN} rule add --whiteout ${shQuote(virtual)}`
+        : type === 'opaque'
+            ? `${NM_BIN} rule add --opaque ${shQuote(virtual)} ${shQuote(real)}`
+            : `${NM_BIN} rule add ${shQuote(virtual)} ${shQuote(real)}`;
+
+    const { errno, stderr } = await exec(cmd);
+    rules.push({ type, virtual, real: type === 'whiteout' ? '' : real });
+    const persisted = await writeCustomRules(rules);
+
+    if (persisted.errno !== 0) showToast(translate('rule_save_failed'));
+    else if (errno !== 0) showToast(translate('rule_saved_pending'));
+    else showToast(translate('rule_added'));
+
+    await loadCustomRules();
+    loadHome();
+}
+
+async function removeCustomRule(index, domItem) {
+    const rules = await readCustomRules();
+    const rule = rules[index];
+    if (!rule) return;
+
+    domItem.style.opacity = '0.5';
+    domItem.style.pointerEvents = 'none';
+    showToast(translate('rule_deleting'));
+
+    try {
+        await exec(`${NM_BIN} rule del ${shQuote(rule.virtual)}`);
+        rules.splice(index, 1);
+        const persisted = await writeCustomRules(rules);
+        if (persisted.errno !== 0) throw new Error(persisted.stderr || 'Failed to save rules');
+        showToast(translate('rule_deleted'));
+    } catch {
+        showToast(translate('rule_delete_failed'));
+        domItem.style.opacity = '1';
+        domItem.style.pointerEvents = 'auto';
+    }
+
+    await loadCustomRules();
+    loadHome();
+}
+
+function renderRuleTypePicker() {
+    const wrapper = document.getElementById('rule-type-wrapper');
+    const valueDisplay = document.getElementById('rule-type-value');
+    const menu = document.getElementById('rule-type-menu');
+    if (!wrapper || !valueDisplay || !menu) return;
+
+    menu.replaceChildren();
+    CUSTOM_RULE_TYPES.forEach(type => {
+        const optionEl = document.createElement('div');
+        optionEl.className = `custom-select-option ${type === customRuleType ? 'selected' : ''}`;
+        optionEl.textContent = translate(`rule_type_${type}`);
+        optionEl.onclick = (e) => {
+            e.stopPropagation();
+            wrapper.classList.remove('open');
+            customRuleType = type;
+            renderRuleTypePicker();
+            toggleRuleRealField();
+        };
+        menu.appendChild(optionEl);
+    });
+    valueDisplay.textContent = translate(`rule_type_${customRuleType}`);
+}
+
+function toggleRuleRealField() {
+    const field = document.getElementById('rule-real-field');
+    if (field) field.style.display = customRuleType === 'whiteout' ? 'none' : '';
+}
+
+function closeCustomRuleModalFromHistory() {
+    const modal = document.getElementById('custom-rule-modal');
+    if (!modal?.classList.contains('active')) return;
+    modal.classList.remove('active');
+    document.getElementById('rule-virtual-input')?.blur();
+    document.getElementById('rule-real-input')?.blur();
+}
+
+async function openCustomRuleModal() {
+    const modal = document.getElementById('custom-rule-modal');
+    if (!modal) return;
+
+    customRuleType = 'inject';
+    document.getElementById('rule-virtual-input').value = '';
+    document.getElementById('rule-real-input').value = '';
+    renderRuleTypePicker();
+    toggleRuleRealField();
+
+    const typeWrapper = document.getElementById('rule-type-wrapper');
+    if (typeWrapper && !typeWrapper.dataset.listenerAttached) {
+        document.getElementById('rule-type-trigger').onclick = (e) => {
+            e.stopPropagation();
+            typeWrapper.classList.toggle('open');
+        };
+        document.addEventListener('click', () => typeWrapper.classList.remove('open'));
+        typeWrapper.dataset.listenerAttached = 'true';
+    }
+
+    modal.classList.add('active');
+    nmPush({ level: 3, dialog: 'customRule' });
+    setTimeout(() => document.getElementById('rule-virtual-input')?.focus(), 150);
+
+    document.getElementById('btn-cancel-rule').onclick = () => history.back();
+    modal.onclick = (e) => { if (e.target === modal) history.back(); };
+    document.getElementById('btn-confirm-rule').onclick = async () => {
+        const virtual = document.getElementById('rule-virtual-input').value.trim();
+        const real = document.getElementById('rule-real-input').value.trim();
+        const type = customRuleType;
+        if (!isValidRulePath(virtual) || (type !== 'whiteout' && !isValidRulePath(real))) {
+            showToast(translate('invalid_rule_path'));
+            return;
+        }
+        if (history.state?.dialog === 'customRule') history.back();
+        await addCustomRule(virtual, real, type);
+    };
 }
 
 // Apps & Exclusions
@@ -1368,8 +1599,10 @@ function initOptionsUI() {
             try {
                 const clearResult = await exec(`${NM_BIN} rule clear`);
                 if (clearResult.errno !== 0) throw new Error(clearResult.stderr || 'Failed to clear runtime rules');
+                await writeCustomRules([]);
                 showToast(translate('clear_rules_done'));
                 loadModules();
+                loadCustomRules();
             } catch { showToast(translate('save_failed') || "Failed"); }
         };
     }
@@ -1396,9 +1629,11 @@ function initOptionsUI() {
                 if (persistResult.errno !== 0) throw new Error(persistResult.stderr || 'Failed to clear exclusions cache');
                 const clearResult = await exec(`${NM_BIN} clear all`);
                 if (clearResult.errno !== 0) throw new Error(clearResult.stderr || 'Failed to clear runtime rules');
+                await writeCustomRules([]);
                 showToast(translate('clear_all_done'));
                 loadModules();
                 loadExclusions();
+                loadCustomRules();
             } catch { showToast(translate('save_failed')); }
         };
     }
@@ -1472,7 +1707,7 @@ function attachPullToRefresh(containerSelector, indicatorSelector, threshold, re
 async function refreshCurrentView() {
     const id = document.querySelector('.view-content.active')?.id;
     if (id === 'view-home') await loadHome();
-    else if (id === 'view-modules') await loadModules();
+    else if (id === 'view-modules') { await loadModules(); await loadCustomRules(); }
     else if (id === 'view-exclusions') await loadExclusions();
     else if (id === 'view-options') await loadOptions();
 }
@@ -1757,6 +1992,17 @@ function initDelegationAndAttach() {
 
     document.getElementById('fab-add-exclusion')?.addEventListener('click', openAppSelector);
 
+    document.getElementById('btn-add-custom-rule')?.addEventListener('click', openCustomRuleModal);
+
+    document.getElementById('custom-rules-list')?.addEventListener('click', (e) => {
+        const delBtn = e.target.closest('.btn-delete-rule');
+        if (!delBtn) return;
+        const item = delBtn.closest('.custom-rule-card');
+        const index = Number(delBtn.dataset.index);
+        if (!item || Number.isNaN(index)) return;
+        setTimeout(() => { removeCustomRule(index, item); }, 0);
+    });
+
     attachPullToRefresh('.page-container', '.pull-to-refresh-indicator', 90, async () => { await refreshCurrentView(); },
     () => {
         const activeId = document.querySelector('.view-content.active')?.id;
@@ -1805,7 +2051,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
-        if (!viewLoadState['view-modules']) loadModules();
+        if (!viewLoadState['view-modules']) { loadModules(); loadCustomRules(); }
         if (!viewLoadState['view-exclusions']) loadExclusions();
         if (!viewLoadState['view-options']) loadOptions();
     } catch {}
